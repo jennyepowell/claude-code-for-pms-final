@@ -24,4 +24,92 @@ teaching scenario.
 
 ## Working context
 
-_You'll fill this in during Module 1._
+I am the new PM for **Rook Dispatch** (replacing Priya, who left 21 Aug 2026).
+Sources: rook-wiki (Company pages, Team directory, Releases, Q3 roadmap,
+Product briefs, 4.2 comments) and `00-rook/company/notes/handoff-from-priya.docx`.
+Also in this folder: `00-rook/code/dispatch-routing/` (routing code) and
+`00-rook/feedback/` (empty). A `rook-database` connector exists; not yet read.
+
+### Company and products
+- Rook sells coordination/provisioning software to masked responders
+  (independent, not employees) and their handlers and quartermasters.
+  Subscription, priced per active responder. Monthly release train, 4.x numbers.
+- **Dispatch** (mine): handler web console + responder phone app. Incident ->
+  rank available responders -> ping top one -> taken, or turned down/missed
+  and it moves on. Routing config ships with the release; handlers can't change it.
+- **Supply**: requisitions, quartermaster approval, maintenance, field failure
+  reports. Reads (never writes) the Responder Availability Record that Dispatch
+  writes, and schedules maintenance into low-callout periods, so Dispatch
+  changes to availability flow into Supply silently.
+- **Confidentiality:** cover identities are never stored; no mapping to legal
+  identity exists. Never design anything that assumes one (Security Policy 4.1)
+  and never try to work out who anyone is.
+
+### People (4.2 comments use roles only)
+| Role in comments | Person | Notes |
+| --- | --- | --- |
+| Engineering manager | Marcus Oyelaran (Site Aleph) | Runs Dispatch eng; blunt; first stop. Asked the key 4.2 question |
+| Staff engineer | Wen Li (Berlin) | Built the ping-ranking logic; the only "documentation" of it |
+| Product designer | Sofia Marino (Site Aleph) | Console + phone app; ran the September interviews |
+| Support lead | Nadia Hoffmann (Berlin) | Owns tickets; has the breakdown; worth a standing 15 min |
+| (not in comments) | Helen Achebe | Director of Product, my boss; owns roadmap and commitments |
+| (not in comments) | Ravi Menon (Singapore) | Data analyst; weekly acceptance-rate reporting |
+| Priya | Priya Raghunathan | Former PM; unreachable except via Marcus |
+
+Handlers named in wiki: Halloran (Sgt. Bulwark; Supply), Aunt Dot (Vesper),
+Mr. Ambrose (Captain Vantage), Kip (Meteor Mite, The Gale).
+
+### Vocabulary
+- **Callout** unit of work; **ping** a callout offered to one responder.
+  **Taken / turned down / missed** (nobody answered within the **ping wait**;
+  recorded separately from turned down, both move it on).
+- **Acceptance rate** = taken / pings; headline metric, reported weekly in
+  aggregate. **Time-to-accept** = median seconds ping to taken.
+  **Coverage gap** = no available responder had the tags (not the same as low acceptance).
+- **Routing priority**: score from proximity (travel-time estimate), availability,
+  capability match, recent acceptance history. Turning down or missing a ping
+  lowers recent acceptance and so future rank.
+- **Capability tags**: flight, structural-entry, hazmat-tolerant, cold-weather,
+  aquatic, crowd-management, de-escalation. **Mutual aid**: not supported; Q4 list.
+- Supply: requisition, field failure report, service interval.
+
+### Where things stand (as of the wiki; verify before relying)
+- **Releases:** 4.0 (7 Apr: nav, profile redesign, override audit log); 4.1
+  (16 Jun: travel-time proximity, bulk callout, push reliability); 4.2 (12 Aug:
+  proximity weighted up vs. acceptance history, ping wait 90s -> 60s, filter
+  persistence, 3 fixes).
+- **4.2 problem:** callout tickets ~3x normal since ~12 Aug and flat since;
+  about two-thirds "phone never goes off", one-third "gone before I could answer".
+  The one-third has a known cause (60s wait). The two-thirds is **unexplained**.
+- **Competing explanations, none yet tested:** Priya says seasonal (August is
+  soft) and not to revert; Marcus repeated that. But two changes shipped together,
+  so the seasonal claim can't be separated from them without data. Marcus's
+  unanswered question (14 Aug): does the proximity change apply to responders who
+  turn pings down? Config doesn't distinguish them. Wen Li was away then and
+  hasn't answered. No real numbers have been pulled; Ravi's weekly report is the source.
+- **Don't assume** 4.2 is the cause, or that it's seasonal. Check data first.
+- **Roadmap is stale** (last reviewed 30 Jun, all owned by Priya). Committed for
+  4.2: who-gets-pinged (shipped), ping timeout tuning (shipped as 60s), and
+  **Availability Confidence (not in the 4.2 notes; apparently slipped)**.
+  4.3: requisition approval chains (Supply). Q4 exploring: handler phone app,
+  shared cover between responders. Priya flagged the slipped items need a
+  conversation with Helen; it hasn't happened.
+- **Briefs:** Routing Override Audit Log and Bulk Callout appear shipped (4.0,
+  4.1) though the pages read as proposals. Handler Phone App (8 Sep) is for
+  handlers; responders already have a phone app. Requisition Approval Chains
+  asks for one thing (second approval over $2,000) then piles on four more;
+  scope is undecided.
+- **Gaps:** no written description of how pings are decided (Priya asked me to
+  write it); no baseline for time-to-full-coverage; September interview
+  database ("Customer interviews") not yet read.
+
+### Working notes
+- Priya's handover is opinion, not data; label it as such.
+- Treat roadmap "Committed" as unverified until Helen confirms.
+
+
+### Added at wrap-up, Module 1
+- "Seasonal" is only supported if acceptance rate and ticket volume were also hit in prior Augusts; the 3x ticket jump started the day of the 12 Aug release, which fits seasonality poorly.
+- The two-thirds / one-third ticket split is Nadia's rough count from 26 Aug, callout tickets only. "Phone never goes off" may be several causes (ranked too low, push delivery, seasonal); not yet separated.
+- Next reads: Nadia's ticket breakdown (any pattern in who is affected), weekly acceptance rate incl. prior Augusts (Ravi / `rook-database`), the Customer interviews, and the routing code in `00-rook/code/dispatch-routing/`.
+- Still open: Marcus's question whether the proximity change was meant to apply to responders who turn pings down; Wen Li hasn't answered. Availability Confidence slip not yet raised with Helen.

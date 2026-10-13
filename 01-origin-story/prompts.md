@@ -23,7 +23,13 @@ prompt library built from your own questions.
 ---
 
 ### 1.
+What are the products and how they connect?
 
 ### 2.
+What was included in the 4.2 release?
 
 ### 3.
+What would "seasonal" mean in terms of why this bump in tickets is occurring?
+
+### 4.
+so the customer experience issue is that "the phone never goes off" and that accounts for two thirds of the tickets, right?
