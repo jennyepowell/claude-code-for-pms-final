@@ -17,6 +17,10 @@ prompt library built from your own questions.
 
 ### 1.
 
+Why might Marcus be asking this question?
+
 ### 2.
+
+Complete this prompt: "According to my findings in the code, for someone who's gone quiet, they would need to..."
 
 ### 3.
