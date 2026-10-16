@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Release 4.2: what happened and the fix</title>
+<style>
+  :root {
+    --bg: #0f1724; --bg2: #162033; --card: #1c2a42; --ink: #eef2f8; --muted: #9fb0c8;
+    --line: #2d3f5e; --amber: #ffc857; --red: #ff6b6b; --green: #4ade80; --blue: #6ea8ff;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-snap-type: y proximity; scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .progress { position: fixed; top: 0; left: 0; height: 4px; width: 0; background: var(--amber); z-index: 20; transition: width .2s; }
+  .dots { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 20; }
+  .dots a { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: block; }
+  .dots a.on { background: var(--amber); }
+  section { min-height: 100vh; scroll-snap-align: start; padding: 56px 8vw; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid var(--line); }
+  section:nth-child(even) { background: var(--bg2); }
+  .chip { display: inline-block; align-self: flex-start; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; background: var(--card); color: var(--amber); border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; margin-bottom: 14px; }
+  h1 { font-size: clamp(36px, 6vw, 68px); line-height: 1.05; margin: 0 0 16px; }
+  h2 { font-size: clamp(26px, 3.6vw, 40px); line-height: 1.15; margin: 0 0 22px; max-width: 24em; }
+  p { margin: 0 0 12px; max-width: 46em; }
+  .muted { color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1.25fr; gap: 28px; align-items: start; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } .dots { display: none; } }
+  .prompt { background: #24344f; border-left: 5px solid var(--blue); border-radius: 4px 16px 16px 16px; padding: 16px 18px; }
+  .prompt .who { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); margin-bottom: 6px; }
+  .prompt .src { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .prompt q { quotes: none; font-size: 18px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; }
+  .panel h3 { margin: 0 0 12px; font-size: 14px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .stats { display: flex; gap: 16px; flex-wrap: wrap; margin: 18px 0; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px; min-width: 170px; }
+  .stat .n { font-size: 44px; font-weight: 800; line-height: 1; }
+  .stat .l { color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .red { color: var(--red); } .green { color: var(--green); } .amber { color: var(--amber); } .blue { color: var(--blue); }
+  .arrow { color: var(--muted); font-weight: 400; font-size: .6em; padding: 0 6px; }
+
+  /* bars */
+  .barrow { display: grid; grid-template-columns: 130px 1fr 60px; gap: 10px; align-items: center; margin: 9px 0; font-size: 15px; }
+  .bar { height: 22px; border-radius: 6px; width: 0; transition: width 1s ease-out; }
+  .visible .bar { width: var(--w); }
+  .bar.red { background: var(--red); } .bar.blue { background: var(--blue); } .bar.green { background: var(--green); } .bar.grey { background: #55698a; }
+  .barrow .v { font-weight: 700; text-align: right; }
+
+  /* timeline */
+  .timeline { position: relative; margin: 26px 0 8px; padding-top: 6px; }
+  .timeline .line { height: 4px; background: var(--line); border-radius: 2px; }
+  .tl { display: flex; justify-content: space-between; gap: 6px; margin-top: -11px; }
+  .tl div { flex: 1; font-size: 13px; color: var(--muted); }
+  .tl div::before { content: ""; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--card); border: 3px solid var(--amber); margin-bottom: 8px; }
+  .tl div.hot::before { background: var(--red); border-color: var(--red); }
+  .tl b { color: var(--ink); display: block; }
+
+  /* score ladder */
+  .ladder { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+  .step { padding: 12px 16px; border-radius: 12px; font-weight: 700; font-size: 18px; opacity: 0; transform: translateY(10px); transition: all .4s ease-out; }
+  .visible .step { opacity: 1; transform: none; }
+  .step small { display: block; font-weight: 400; font-size: 12px; opacity: .85; }
+  .step.miss { background: #4a2227; color: var(--red); }
+  .step.take { background: #14392a; color: var(--green); }
+  .visible .step:nth-child(2) { transition-delay: .25s; } .visible .step:nth-child(3) { transition-delay: .5s; }
+  .visible .step:nth-child(4) { transition-delay: .75s; } .visible .step:nth-child(5) { transition-delay: 1s; }
+
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+  .pill.pass { background: #14392a; color: var(--green); } .pill.part { background: #46380f; color: var(--amber); } .pill.miss { background: #4a2227; color: var(--red); }
+
+  iframe { width: 100%; height: 640px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+  a { color: var(--blue); }
+  ul { margin: 6px 0 12px; padding-left: 20px; } li { margin: 5px 0; }
+  .hint { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 12px; color: var(--muted); background: var(--bg2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; z-index: 20; }
+  @media print { .dots, .hint, .progress { display: none; } section { min-height: auto; page-break-after: always; } }
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<nav class="dots" id="dots"></nav>
+<div class="hint">Scroll, or use ↑ ↓ / Space</div>
+
+<!-- 0 TITLE -->
+<section id="s0">
+  <span class="chip">Rook Dispatch · Final report</span>
+  <h1>Release 4.2:<br>what happened, and the fix</h1>
+  <p class="muted">Dispatch PM · 16 October 2026 · built from my six modules, with the prompts that produced each finding.</p>
+  <div class="stats">
+    <div class="stat"><div class="n red">~3×</div><div class="l">callout tickets after 12 Aug</div></div>
+    <div class="stat"><div class="n amber">4</div><div class="l">responders who went quiet</div></div>
+    <div class="stat"><div class="n green">1</div><div class="l">brief + prototype + skill to fix and prevent it</div></div>
+  </div>
+  <p class="muted">Rook Industries is a fictional course scenario. Responder names are cover identities.</p>
+</section>
+
+<!-- 1 WHAT HAPPENED -->
+<section id="s1">
+  <span class="chip">The short version</span>
+  <h2>4.2 changed two things at once, and four responders stopped hearing from us.</h2>
+  <div class="grid2">
+    <div>
+      <p>On 12 Aug, release 4.2 shortened the <b>ping wait from 90s to 60s</b> and weighted <b>proximity</b> up against acceptance history. Callout tickets jumped from ~6.5 to ~26 a week and stayed there.</p>
+      <p>Pings that nobody answered in time (<b>missed</b>) cost a responder's ranking the same as a "no" (<b>turned down</b>). A lower rank means fewer pings. The score only moves when you are pinged, so a responder who drops can't climb back.</p>
+      <p><b>What isn't proven:</b> the 60s wait clearly caused misses. Whether it, the weight change, or something else collapsed the four responders' rank is not confirmed.</p>
+    </div>
+    <div class="panel">
+      <h3>Timeline</h3>
+      <div class="timeline"><div class="line"></div>
+        <div class="tl">
+          <div><b>16 Jun</b>4.1: travel-time proximity</div>
+          <div class="hot"><b>12 Aug</b>4.2 ships. First "gone too fast" ticket 15:41</div>
+          <div><b>14 Aug</b>Marcus asks the key question</div>
+          <div><b>17 Aug</b>"Phone never goes off" tickets begin</div>
+          <div><b>26 Aug – 1 Sep</b>Quiet-phone tickets peak</div>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:18px">Source: CLAUDE.md working context (ticket timing, ping data to 6 Sep).</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2 MODULE 1 -->
+<section id="s2">
+  <span class="chip">Module 1 · Origin Story</span>
+  <h2>"Seasonal" was the handover's answer. It didn't hold up.</h2>
+  <div class="grid2">
+    <div class="prompt"><div class="who">My prompt</div>
+      <q>What would "seasonal" mean in terms of why this bump in tickets is occurring?</q>
+      <div class="src">01-origin-story/prompts.md · prompt 3</div></div>
+    <div class="panel"><h3>What it turned up</h3>
+      <ul>
+        <li>"Seasonal" is only supported if acceptance rate and tickets were also hit in <b>prior Augusts</b>.</li>
+        <li>The 3× ticket jump started <b>the day of the release</b>, which fits seasonality poorly.</li>
+        <li>Priya's handover is opinion, not data. The database starts 29 Jun, so there is no earlier August to test against.</li>
+      </ul>
+      <p class="muted">So: not ruled out, but not supported either. Go get data.</p></div>
+  </div>
+</section>
+
+<!-- 3 MODULE 2 -->
+<section id="s3">
+  <span class="chip">Module 2 · Super Hearing</span>
+  <h2>The data showed the release day, and the weekly misses jumped.</h2>
+  <div class="grid2">
+    <div class="prompt"><div class="who">My prompt</div>
+      <q>how have the total number of pings and accepted pings changed from before and after the 4.2 release?</q>
+      <div class="src">02-super-hearing/prompts.md · prompt 3</div></div>
+    <div class="panel" id="p3"><h3>Per week, before → after 12 Aug (rook-database)</h3>
+      <div class="barrow"><span>Missed pings</span><div><div class="bar grey" style="--w:13%"></div></div><span class="v">~4</span></div>
+      <div class="barrow"><span></span><div><div class="bar red" style="--w:100%"></div></div><span class="v red">~30</span></div>
+      <div class="barrow"><span>Acceptance rate</span><div><div class="bar grey" style="--w:76.6%"></div></div><span class="v">76.6%</span></div>
+      <div class="barrow"><span></span><div><div class="bar red" style="--w:64%"></div></div><span class="v red">64.0%</span></div>
+      <div class="barrow"><span>Tickets</span><div><div class="bar grey" style="--w:25%"></div></div><span class="v">~6.5</span></div>
+      <div class="barrow"><span></span><div><div class="bar red" style="--w:100%"></div></div><span class="v red">~26</span></div>
+      <p class="muted" style="margin:10px 0 0">Grey = before, red = after (ticket and missed bars use different scales). Acceptance recovered to ~73% by the week of 31 Aug. Callouts nobody took: 5.5% → 11.1%.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4 MODULE 3 -->
+<section id="s4">
+  <span class="chip">Module 3 · Rewind</span>
+  <h2>The people complaining weren't the people hurt.</h2>
+  <div class="grid2">
+    <div class="prompt"><div class="who">My prompt</div>
+      <q>can you show me who is reporting the feedback versus who is experiencing the issues based on the ping data?</q>
+      <div class="src">03-rewind/prompts.md · prompt 6</div></div>
+    <div class="panel" id="p4"><h3>The four who lost ~70% of pings, and what their handlers filed</h3>
+      <div class="barrow"><span>Farlight<br><small class="muted">Linda Pruitt</small></span><div><div class="bar blue" style="--w:90%"></div></div><span class="v">19 tickets</span></div>
+      <div class="barrow"><span>The Undertow<br><small class="muted">Desmond Okafor</small></span><div><div class="bar blue" style="--w:100%"></div></div><span class="v">21 tickets</span></div>
+      <div class="barrow"><span>Vesper<br><small class="muted">Aunt Dot</small></span><div><div class="bar blue" style="--w:2%"></div></div><span class="v amber">none</span></div>
+      <div class="barrow"><span>Meteor Mite<br><small class="muted">Kip</small></span><div><div class="bar blue" style="--w:2%"></div></div><span class="v amber">none</span></div>
+      <p class="muted" style="margin:10px 0 0">Farlight and The Undertow's handlers filed 20 of the 30 quiet-phone tickets. Vesper and Meteor Mite lost the same share of pings and filed none. Kip also handles The Gale (+43%), so Kip's combined −7% hid it. The four interviewed handlers filed one ticket between them.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 MODULE 4 -->
+<section id="s5">
+  <span class="chip">Module 4 · X-Ray Vision</span>
+  <h2>In the code, a quiet responder can't get themselves out.</h2>
+  <div class="grid2">
+    <div class="prompt"><div class="who">My prompt</div>
+      <q>Complete this prompt: "According to my findings in the code, for someone who's gone quiet, they would need to..."</q>
+      <div class="src">04-x-ray-vision/prompts.md · prompt 2</div></div>
+    <div class="panel" id="p5"><h3>history.py: what each ping does to the score</h3>
+      <div class="ladder">
+        <div class="step miss">−0.12<small>missed</small></div>
+        <div class="step miss">−0.12<small>missed</small></div>
+        <div class="step take">+0.08<small>taken</small></div>
+        <div class="step take">+0.08<small>taken</small></div>
+        <div class="step take">+0.08<small>taken</small></div>
+      </div>
+      <p>Two misses need <b>three takes</b> just to break even. A turn-down costs the same as a miss. The score never moves unless the responder is pinged (a 2019 TODO, no decay), and nothing on their side can trigger a ping.</p>
+      <p class="muted">Also: Marcus's 14 Aug question. The ranking change applies to everyone; <code>rank_for_callout</code> removes nobody. Caveat: the lower history weight should soften this, so the collapse isn't fully explained. Proximity is untested.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 6 MODULE 5 BRIEF -->
+<section id="s6">
+  <span class="chip">Module 5 · Super Speed</span>
+  <h2>The fix: stop punishing misses, show why, and give a way back.</h2>
+  <div class="grid2">
+    <div class="prompt"><div class="who">My prompt</div>
+      <q>Let's have misses count for zero - so we can say "misses don't negatively impact your ranking status; only turned down pings bring your ranking status down" or something along those lines. Phrase it as you see fit</q>
+      <div class="src">05-super-speed/prompts.md · prompt 29</div></div>
+    <div class="panel"><h3>05-super-speed/brief.md: three changes, together</h3>
+      <ul>
+        <li><b>Kip sees why.</b> A ranking status (Low / Fair / Good) plus the last five pings and how each ended. No raw score.</li>
+        <li><b>Meteor Mite gets a way back.</b> A callout they'd rank for, with a note saying why.</li>
+        <li><b>A miss counts for zero, past ones included.</b> One-time recalculation at release, for every responder.</li>
+      </ul>
+      <p class="muted">Not in scope: reverting 4.2, changing the 60s wait or the weights, handler overrides. Success is proposed, not agreed: each of the four back to ~12+ pings a week, quiet-phone tickets ≤ ~5 in four weeks.</p></div>
+  </div>
+</section>
+
+<!-- 7 PROTOTYPE -->
+<section id="s7">
+  <span class="chip">Module 5 · the prototype</span>
+  <h2>Click it: Kip's console, then Meteor Mite's phone.</h2>
+  <div class="grid2" style="grid-template-columns: 1fr 1.6fr">
+    <div>
+      <div class="prompt"><div class="who">My prompts</div>
+        <q>make the demo show the recalculation: Meteor Mite starts “Low”, a “Release applied” click recalculates it to “Good”, and the way-back ping stays for those still quiet</q>
+        <div class="src">prompt 31</div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:12px 0">
+        <q>make the callout part look more like an iphone notification and make it green</q>
+        <div class="src">prompt 45 · 05-super-speed/prompts.md</div></div>
+      <p style="margin-top:14px">Try: <b>Release applied</b>, then <b>Simulate callout</b>, then turn the ping down and watch the status change. Placeholder cut-offs and credit sizes, not real scores.</p>
+      <p class="muted">Runs from this folder. <a href="05-super-speed/prototype.html" target="_blank">Open it on its own</a>.</p>
+    </div>
+    <iframe src="05-super-speed/prototype.html" title="Rook Dispatch prototype"></iframe>
+  </div>
+</section>
+
+<!-- 8 MODULE 6 + SKILL -->
+<section id="s8">
+  <span class="chip">Module 6 · Sidekicks</span>
+  <h2>The skill that checks the next brief before it ships.</h2>
+  <div class="grid2">
+    <div>
+      <div class="prompt"><div class="who">My prompt (this session)</div>
+        <q>Turn that into a skill called review-checklist, so I can point it at any brief and get the same check every time, without me explaining it again.</q>
+        <div class="src">Not in 06-sidekicks/prompts.md: its three prompt slots are empty. This one was typed in the session that built the skill.</div></div>
+      <p style="margin-top:14px">The checklist is six questions: customer experience today, the problem, an owner, how we'll know, scope start vs end, and problem before fix. It is saved at <code>.claude/skills/review-checklist/SKILL.md</code>.</p>
+      <p><b>Why it matters for 4.2:</b> nobody wrote down how pings are decided, the roadmap went stale, and there is no baseline to say what "worked" looks like. A brief that has to state its problem with evidence, a measure and an owner before it goes forward is harder to ship on opinion.</p>
+      <p class="muted">What it does not do: it reviews briefs. It won't catch a bug in the code, and it can't prove 4.2's own brief lacked these (I haven't seen it).</p>
+    </div>
+    <div class="panel"><h3>It found gaps in my own brief</h3>
+      <table>
+        <tr><th>Check</th><th>First run</th><th>After fixes</th></tr>
+        <tr><td>Customer experience today</td><td><span class="pill part">Partly</span></td><td><span class="pill pass">Pass</span></td></tr>
+        <tr><td>Problem explained</td><td><span class="pill part">Partly</span></td><td><span class="pill pass">Pass</span></td></tr>
+        <tr><td>Owner named</td><td><span class="pill miss">Missing</span></td><td><span class="pill pass">Pass</span></td></tr>
+        <tr><td>Success measure</td><td><span class="pill part">Partly</span></td><td><span class="pill pass">Pass</span></td></tr>
+        <tr><td>Scope start = end</td><td><span class="pill part">Partly</span></td><td><span class="pill part">Partly</span></td></tr>
+        <tr><td>Problem before fix</td><td><span class="pill part">Partly</span></td><td><span class="pill pass">Pass</span></td></tr>
+      </table>
+      <p class="muted" style="margin-top:12px">The scope gap (the recalculation reaches everyone) was fixed after the second run; I haven't re-run it since.</p>
+      <h3 style="margin-top:18px">06-sidekicks/scheduled-run-output.txt</h3>
+      <p>A scheduled run of a review-checklist over four existing briefs flagged all four, one gap each: no owner (Bulk Callout), no success measure (Routing Override Audit Log), scope that grows (Requisition Approval Chains), solution before problem (Handler Phone App). Note it lists four checks, not the six in the saved skill.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 9 OPEN -->
+<section id="s9">
+  <span class="chip">Honest ending</span>
+  <h2>What I still don't know.</h2>
+  <div class="grid2" style="grid-template-columns: 1fr 1fr">
+    <div class="panel"><h3>Open questions</h3>
+      <ul>
+        <li><b>Cause.</b> 60s wait vs weight change vs both. Not separable from the data.</li>
+        <li><b>Proximity.</b> A farther-away responder could read "Good" and still be quiet. No scores or locations in the database.</li>
+        <li><b>Response times.</b> Did the four answer in 60–90s before 12 Aug? Ravi can pull it.</li>
+        <li><b>Feasibility.</b> Scores sit in memory in <code>history.py</code>; can a recalculation run, and what does it do to Supply?</li>
+        <li><b>Data</b> stops 6 Sep. No prior August exists.</li>
+      </ul></div>
+    <div class="panel"><h3>Next</h3>
+      <ul>
+        <li>Ask Wen Li and Marcus to check the real scores and the proximity effect, and whether a miss should count like a turn-down.</li>
+        <li>Send Marcus the reply on his 14 Aug question.</li>
+        <li>Take the slipped Availability Confidence item to Helen.</li>
+        <li>Round 2 interviews with the ticket filers, who were never interviewed.</li>
+        <li>Confirm the success targets with Helen.</li>
+      </ul></div>
+  </div>
+</section>
+
+<script>
+  const secs = [...document.querySelectorAll('section')];
+  const dots = document.getElementById('dots');
+  secs.forEach((s, i) => { const a = document.createElement('a'); a.href = '#' + s.id; a.title = 'Slide ' + (i + 1); dots.appendChild(a); });
+  const da = [...dots.children];
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      da.forEach((d, i) => d.classList.toggle('on', secs[i] === e.target));
+    }
+  }), { threshold: 0.2 });
+  secs.forEach(s => io.observe(s));
+  addEventListener('scroll', () => {
+    const h = document.documentElement;
+    document.getElementById('progress').style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+  });
+  addEventListener('keydown', e => {
+    if (e.target.tagName === 'IFRAME') return;
+    const cur = secs.findIndex(s => Math.abs(s.getBoundingClientRect().top) < innerHeight / 2);
+    if (['ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); secs[Math.min(cur + 1, secs.length - 1)].scrollIntoView(); }
+    if (['ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); secs[Math.max(cur - 1, 0)].scrollIntoView(); }
+  });
+</script>
+</body>
+</html>
