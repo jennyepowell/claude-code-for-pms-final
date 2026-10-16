@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rook Dispatch prototype: quiet responders</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --panel: #fff; --ink: #1f2933; --muted: #6b7785; --line: #dde1e6;
+    --ok: #1e7f4f; --ok-bg: #e3f4ea; --warn: #a15c00; --warn-bg: #fdf0d9;
+    --bad: #b3261e; --bad-bg: #fbe6e4; --accent: #2b50aa; --accent-bg: #e6ecf8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); }
+  .banner { background: #1f2933; color: #fff; padding: 8px 20px; font-size: 13px; }
+  .banner b { color: #ffd479; }
+  header.console-bar { background: var(--panel); border-bottom: 1px solid var(--line); padding: 12px 20px; display: flex; gap: 16px; align-items: center; }
+  header.console-bar h1 { font-size: 17px; margin: 0; }
+  header.console-bar .who { margin-left: auto; color: var(--muted); font-size: 13px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 24px; padding: 20px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .card h3 { margin: 0; font-size: 16px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .status-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+  .status-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; cursor: help; }
+  .band { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .band.normal { background: var(--ok-bg); color: var(--ok); }
+  .band.low { background: var(--bad-bg); color: var(--bad); }
+  .band.recovering { background: var(--warn-bg); color: var(--warn); }
+  .stats { display: flex; gap: 18px; margin: 12px 0 8px; }
+  .stat .n { font-size: 24px; font-weight: 700; }
+  .stat .l { font-size: 12px; color: var(--muted); }
+  .chips { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 10px; }
+  .pinglist { margin: 4px 0 10px; font-size: 13px; }
+  .pinglist .cap { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .pinglist .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-top: 1px solid #eef0f3; }
+  .pinglist .row:first-of-type { border-top: 0; }
+  .pinglist .when { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip { font-size: 12px; padding: 2px 8px; border-radius: 6px; }
+  .chip.taken { background: var(--ok-bg); color: var(--ok); }
+  .chip.turned { background: #eceff3; color: #44505c; }
+  .chip.missed { background: var(--bad-bg); color: var(--bad); }
+  .why { border-top: 1px solid var(--line); padding-top: 10px; font-size: 14px; }
+  .why summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+  .why ul { margin: 8px 0 0; padding-left: 18px; }
+  .why li { margin: 3px 0; }
+  .why .score { margin-top: 10px; background: var(--accent-bg); border-radius: 8px; padding: 8px 10px; display: none; }
+  .why .score.show { display: block; }
+  .linkbtn { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font: inherit; text-decoration: underline; margin-top: 8px; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .nextstep { margin-top: 10px; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  .nextstep.done { background: var(--ok-bg); color: var(--ok); }
+  .flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { box-shadow: 0 0 0 4px #ffd47988; } to { box-shadow: 0 0 0 0 transparent; } }
+
+  .controls { margin-top: 16px; background: var(--panel); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; }
+  .controls p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.primary:disabled { background: #aab4c8; cursor: not-allowed; }
+  button.ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px; font: inherit; cursor: pointer; }
+  .legend { margin-top: 14px; font-size: 12px; color: var(--muted); }
+
+  .phone-wrap { position: sticky; top: 16px; align-self: start; }
+  .phone { width: 300px; height: 560px; background: #111; border-radius: 34px; padding: 12px; margin: 0 auto; }
+  .screen { background: #fff; border-radius: 24px; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+  .status { background: #f7f8fa; padding: 14px 16px 8px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+  .screen .body { padding: 16px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+  .screen h4 { margin: 0; font-size: 18px; }
+  .quietnote { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 12px; font-size: 14px; }
+  .quietnote.ok { background: var(--ok-bg); color: var(--ok); }
+  .ping { display: none; background: linear-gradient(#25a84f, #1b8a41); color: #fff; border-radius: 20px; padding: 12px 14px; box-shadow: 0 6px 16px rgba(27,138,65,.35); }
+  .ping.show { display: block; animation: slidein .35s ease-out; }
+  @keyframes slidein { from { transform: translateY(-14px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .ping .np-head { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .04em; opacity: .92; }
+  .ping .np-icon { width: 18px; height: 18px; border-radius: 5px; background: #fff; color: #1b8a41; font-weight: 800; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+  .ping .np-time { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .ping .np-title { font-size: 15px; font-weight: 700; margin-top: 6px; }
+  .ping .np-body { font-size: 13px; margin-top: 3px; opacity: .95; }
+  .ping .np-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .ping .np-actions button { flex: 1; border: 0; border-radius: 10px; padding: 9px 0; font: inherit; font-weight: 600; cursor: pointer; background: rgba(255,255,255,.22); color: #fff; }
+  .ping .np-actions button#take { background: #fff; color: #1b8a41; }
+  .result { font-size: 14px; color: var(--muted); min-height: 20px; }
+  .tabs { background: var(--panel); border-bottom: 1px solid var(--line); padding: 0 20px; display: flex; gap: 4px; }
+  .tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; font: inherit; color: var(--muted); cursor: pointer; }
+  .tabs button.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .only-responder { display: none; }
+  body.responder-mode .only-responder { display: inline; }
+  body.responder-mode .only-handler, body.responder-mode .cards, body.responder-mode .legend { display: none; }
+  body.responder-mode main { display: flex; flex-direction: column; align-items: center; }
+  body.responder-mode .phone-wrap { order: 1; position: static; }
+  body.responder-mode section { order: 2; width: 100%; max-width: 560px; }
+  body.responder-mode .phone { height: 640px; }
+  body.responder-mode section > h2 { display: none; }
+  .phone-status { display: flex; justify-content: space-between; align-items: center; }
+  .phone-why { font-size: 13px; }
+  .mylist { font-size: 13px; }
+  .mylist .cap { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .mylist .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-top: 1px solid #eef0f3; }
+  .mylist .row:first-of-type { border-top: 0; }
+  .mylist .when { color: var(--muted); }
+  .screen .body { overflow-y: auto; }
+  .tag { display: inline-block; font-size: 11px; background: #eceff3; border-radius: 4px; padding: 1px 6px; color: #44505c; margin-left: 6px; }
+</style>
+</head>
+<body>
+
+<div class="banner"><b>Prototype.</b> Illustrative data only, not real scores. The responder names are cover identities. Run the demo below to see the way back.</div>
+
+<header class="console-bar">
+  <h1>Rook Dispatch · Coverage</h1>
+  <span class="who"><span class="only-handler">Signed in as Kip · handler for Meteor Mite and The Gale</span><span class="only-responder">Rook responder app · Meteor Mite</span></span>
+</header>
+<nav class="tabs">
+  <button class="on" data-view="handler">Handler view (Kip)</button>
+  <button data-view="responder">Responder view (Meteor Mite)</button>
+</nav>
+
+<main>
+  <section>
+    <h2>Your responders</h2>
+    <div class="cards">
+
+      <!-- Meteor Mite -->
+      <article class="card" id="card-mite">
+        <h3>Meteor Mite <span class="status-wrap"><span class="status-label" title="Where this responder sits in the order Dispatch asks people, based on recent pings. It does not include how close they are to a callout.">Ranking status</span><span class="band low" id="mite-band">Low</span></span></h3>
+        <div class="stats">
+          <div class="stat"><div class="n" id="mite-pings">4</div><div class="l">pings this week (usually 14)</div></div>
+          <div class="stat"><div class="n" id="mite-last">6 days</div><div class="l">since last ping taken</div></div>
+        </div>
+        <div class="pinglist" id="mite-chips"></div>
+        <div class="why">
+          <details open>
+            <summary>Ranking Status Explanation</summary>
+            <ul id="mite-why"></ul>
+            <div class="nextstep" id="mite-next">Next step: if Meteor Mite is available, Dispatch will offer them a callout they rank for, so they can take their place back.</div>
+          </details>
+        </div>
+        <p class="note">Reflects recent acceptance only. Proximity varies by callout and routing weights are not shown.</p>
+      </article>
+
+      <!-- The Gale -->
+      <article class="card" id="card-gale">
+        <h3>The Gale <span class="status-wrap"><span class="status-label" title="Where this responder sits in the order Dispatch asks people, based on recent pings. It does not include how close they are to a callout.">Ranking status</span><span class="band normal">Good</span></span></h3>
+        <div class="stats">
+          <div class="stat"><div class="n">21</div><div class="l">pings this week (usually 15)</div></div>
+          <div class="stat"><div class="n">2 hrs</div><div class="l">since last ping taken</div></div>
+        </div>
+        <div class="pinglist">
+          <div class="cap">Last 5 pings, newest first</div>
+          <div class="row"><span class="when">Fri 16 Oct, 11:12</span><span class="chip taken">Taken</span></div>
+          <div class="row"><span class="when">Fri 16 Oct, 08:40</span><span class="chip taken">Taken</span></div>
+          <div class="row"><span class="when">Thu 15 Oct, 23:55</span><span class="chip turned">Turned down</span></div>
+          <div class="row"><span class="when">Thu 15 Oct, 18:30</span><span class="chip taken">Taken</span></div>
+          <div class="row"><span class="when">Thu 15 Oct, 14:10</span><span class="chip taken">Taken</span></div>
+        </div>
+        <div class="why">
+          <details open>
+            <summary>Ranking Status Explanation</summary>
+            <ul id="gale-why"></ul>
+          </details>
+        </div>
+      </article>
+    </div>
+
+    <div class="controls">
+      <p><b>Demo:</b> start with Meteor Mite as Low. Apply the release to recalculate scores ignoring past misses, then simulate a nearby callout to see the way back for anyone still quiet.</p>
+      <button class="primary" id="release">1. Release applied</button>
+      <button class="primary" id="run">2. Simulate a nearby callout</button>
+      <button class="ghost" id="reset">Reset demo</button>
+    </div>
+    <p class="legend">What this prototype shows from the brief: (1) the handler sees why a card is quiet, (2) the responder gets a way back with a note on the phone, (3) status moves with each ping (Low, Fair, Good), a missed ping no longer counts against ranking, and only a turned-down ping does, with a one-time recalculation at release that ignores past misses. Scores are tracked behind the scenes; the card shows only the status and what contributes to it.</p>
+  </section>
+
+  <aside class="phone-wrap">
+    <h2 style="text-align:center">Meteor Mite's phone</h2>
+    <div class="phone"><div class="screen">
+      <div class="status"><span>Rook</span><span>Available</span></div>
+      <div class="body">
+        <h4>Hello, Meteor Mite</h4>
+        <div class="phone-status"><span class="status-label">Ranking status</span><span class="band" id="phone-band"></span></div>
+        <div class="ping" id="ping">
+          <div class="np-head"><span class="np-icon">R</span><span>ROOK DISPATCH</span><span class="np-time">now · <span id="countdown">60s</span></span></div>
+          <div class="np-title">🦸 Hero needed nearby! Capes optional.</div>
+          <div class="np-body" id="ping-msg">Not all heroes wear capes, but all of them take the call. Take this call to improve your ranking status.</div>
+          <div class="np-actions">
+            <button id="take">Take it</button>
+            <button id="decline">Turn down</button>
+          </div>
+        </div>
+        <div class="result" id="result"></div>
+        <div class="why phone-why"><details open><summary>Ranking Status Explanation</summary><ul id="phone-why"></ul></details></div>
+        <div class="mylist" id="phone-list"></div>
+      </div>
+    </div></div>
+  </aside>
+</main>
+
+<script>
+(function () {
+  var CREDIT = 0.08;       // a take (placeholder, matches current config)
+  var MISS_COST = 0;       // a miss no longer counts against ranking
+  var TURN_COST = 0.12;    // a turn-down, unchanged
+  var GOOD_AT = 0.40;      // placeholder: score at or above this shows Good
+  var FAIR_AT = 0.25;      // placeholder: at or above this (and below Good) shows Fair
+
+  var state, timer, secs;
+
+  function fresh() {
+    return {
+      score: 0.20, pings: 4, last: '6 days',
+      chips: [ // newest first, illustrative times
+        { k: 'missed', t: 'Thu 15 Oct, 19:42' },
+        { k: 'missed', t: 'Wed 14 Oct, 08:15' },
+        { k: 'turned', t: 'Tue 13 Oct, 22:30' },
+        { k: 'missed', t: 'Mon 12 Oct, 13:05' },
+        { k: 'taken',  t: 'Sat 10 Oct, 17:20' }
+      ],
+      mins: 0,
+      recovering: false, released: false, resolved: false, outcome: ''
+    };
+  }
+  function stamp() { // simulated clock, starts Fri 16 Oct, 13:45
+    var m = 13 * 60 + 45 + state.mins; state.mins += 6;
+    var h = Math.floor(m / 60), mm = m % 60;
+    return 'Fri 16 Oct, ' + (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+  var $ = function (id) { return document.getElementById(id); };
+  var label = { taken: 'Taken', turned: 'Turned down', missed: 'Missed' };
+
+  // Status comes from the score, which moves with each ping.
+  function status() {
+    if (state.score >= GOOD_AT) return 'good';
+    if (state.score >= FAIR_AT) return 'fair';
+    return 'low';
+  }
+  // The release recalculation: replay the history oldest to newest, ignoring misses.
+  function recalc() {
+    var sc = 0.5;
+    state.chips.slice().reverse().forEach(function (c) {
+      if (c.k === 'taken') sc = Math.min(1, sc + CREDIT);
+      else if (c.k === 'turned') sc = Math.max(0, sc - TURN_COST);
+    });
+    return sc;
+  }
+  function howItChanges() {
+    return state.released
+      ? '<li><b>How it changes:</b> Taking a ping raises your ranking status. Turning one down lowers it. Missed pings don\'t change it.</li>'
+      : '<li><b>How it changes:</b> Taking a ping raises your ranking status. Turning one down or missing one lowers it.</li>';
+  }
+  function count(kind) { return state.chips.filter(function (c) { return c.k === kind; }).length; }
+  function missCount() { return count('missed'); }
+
+  function render() {
+    var band = $('mite-band');
+    var st = status();
+    if (st === 'good') { band.className = 'band normal'; band.textContent = 'Good'; }
+    else if (st === 'fair') { band.className = 'band recovering'; band.textContent = 'Fair'; }
+    else { band.className = 'band low'; band.textContent = 'Low'; }
+
+    var pb = $('phone-band');
+    pb.className = band.className; pb.textContent = band.textContent;
+    $('ping-msg').style.display = (st === 'good') ? 'none' : '';
+
+    $('mite-pings').textContent = state.pings;
+    $('mite-last').textContent = state.last;
+    $('mite-chips').innerHTML = '<div class="cap">Last 5 pings, newest first</div>' + state.chips.map(function (c) {
+      return '<div class="row"><span class="when">' + c.t + '</span><span class="chip ' + c.k + '">' + label[c.k] + '</span></div>';
+    }).join('');
+
+    var why = [
+      st === 'good'
+        ? (state.released
+            ? '<li><b>Status:</b> Good. Missed pings no longer count against you, and recent turned-down pings are few.</li>'
+            : '<li><b>Status:</b> Good. Recent pings have been taken.</li>')
+        : st === 'fair'
+          ? (state.released
+              ? '<li><b>Status:</b> Fair, because of a recent turned-down ping. Taking pings brings it back up.</li>'
+              : '<li><b>Status:</b> Fair. Recovering from earlier missed pings; taking pings brings it up.</li>')
+          : (state.released
+              ? '<li><b>Status:</b> Low, because of repeated turned-down pings.</li>'
+              : '<li><b>Status:</b> Low, from earlier pings that were missed.</li>'),
+      howItChanges()
+    ];
+    $('mite-why').innerHTML = why.join('');
+    $('phone-why').innerHTML = why.join('');
+    $('gale-why').innerHTML = (state.released
+      ? '<li><b>Status:</b> Good. Missed pings no longer count against you, and recent turned-down pings are few.</li>'
+      : '<li><b>Status:</b> Good. Recent pings have been taken.</li>') + howItChanges();
+
+    $('phone-list').innerHTML = '<div class="cap">Your recent pings</div>' + state.chips.map(function (c) {
+      return '<div class="row"><span class="when">' + c.t + '</span><span class="chip ' + c.k + '">' + label[c.k] + '</span></div>';
+    }).join('');
+
+    var next = $('mite-next');
+    if (state.outcome === 'taken') {
+      next.className = 'nextstep done';
+      next.textContent = 'Meteor Mite took the way-back callout. Their place is coming back; give it a few callouts.';
+    } else if (state.outcome === 'missed') {
+      next.className = 'nextstep';
+      next.textContent = 'Meteor Mite did not answer this one. A missed ping does not change their ranking status. Dispatch will try again; it is also worth checking they are actually available.';
+    } else if (state.outcome === 'turned') {
+      next.className = 'nextstep';
+      next.textContent = 'Meteor Mite turned this one down. A turn-down keeps its normal cost' + (st !== 'good' ? ', so their ranking status is now ' + (st === 'fair' ? 'Fair' : 'Low') + '.' : '.');
+    } else {
+      next.className = 'nextstep';
+      next.textContent = state.released
+        ? 'Release applied: Meteor Mite is recalculated to Good. If their phone is still quiet, Dispatch will offer them a callout they rank for.'
+        : 'Next step: if Meteor Mite is available, Dispatch will offer them a callout they rank for, so they can take their place back.';
+    }
+
+  }
+
+  function flash() {
+    var c = $('card-mite');
+    c.classList.remove('flash'); void c.offsetWidth; c.classList.add('flash');
+  }
+
+  function finish(kind) {
+    clearInterval(timer);
+    $('ping').classList.remove('show');
+    state.resolved = true;
+    state.outcome = kind;
+    state.chips.unshift({ k: kind, t: stamp() }); state.chips.pop();
+    state.pings += 1;
+    if (kind === 'taken') {
+      state.score = Math.min(1, state.score + CREDIT);
+      state.recovering = true; state.last = 'just now';
+      $('result').textContent = 'You took the callout.';
+    } else if (kind === 'missed') {
+      state.score = Math.max(0, state.score - MISS_COST);
+      $('result').textContent = 'The ping ran out and moved on. A missed ping does not affect your ranking.';
+    } else {
+      state.score = Math.max(0, state.score - TURN_COST);
+      $('result').textContent = 'You turned it down and it moved on. A turned-down ping lowers your place in the order.';
+    }
+    $('run').disabled = false;
+    render(); flash();
+  }
+
+  $('run').addEventListener('click', function () {
+    if (!$('run').disabled) {
+      $('run').disabled = true;
+      $('result').textContent = '';
+      $('ping').classList.add('show');
+      secs = 60; $('countdown').textContent = secs + 's';
+      timer = setInterval(function () {
+        secs -= 1; $('countdown').textContent = secs + 's';
+        if (secs <= 0) finish('missed');
+      }, 1000);
+    }
+  });
+  $('release').addEventListener('click', function () {
+    state.released = true;
+    state.score = recalc();
+    $('release').disabled = true;
+    render(); flash();
+  });
+  $('take').addEventListener('click', function () { finish('taken'); });
+  $('decline').addEventListener('click', function () { finish('turned'); });
+
+  $('reset').addEventListener('click', function () {
+    clearInterval(timer);
+    $('ping').classList.remove('show');
+    $('result').textContent = '';
+    $('run').disabled = false;
+    $('release').disabled = false;
+    state = fresh(); render();
+  });
+
+  document.querySelectorAll('.tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+      document.body.classList.toggle('responder-mode', b.getAttribute('data-view') === 'responder');
+    });
+  });
+
+  state = fresh(); render();
+})();
+</script>
+</body>
+</html>
