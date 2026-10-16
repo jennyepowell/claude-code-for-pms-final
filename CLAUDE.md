@@ -134,3 +134,10 @@ Mr. Ambrose (Captain Vantage), Kip (Meteor Mite, The Gale).
 - In the code, availability is a filter (`available_for`), not a score input, though the glossary lists it as one; proximity is per callout, so the status can't reflect it. A farther-away responder could read Good yet stay quiet, and proximity is still untested.
 - Left out of the brief and still open: cause unconfirmed, data stops 6 Sep, response times (did the four answer in 60-90s before 12 Aug), whether the recalculation is feasible (scores sit in memory in `history.py`) and what it does to others and to Supply, and Wen and Marcus not yet asked. A per-responder 60 or 90s wait was floated but is not in the brief. Availability Confidence still needs the talk with Helen.
 - I checked the prototype's script for syntax only; it has not been clicked through in a browser.
+
+### Added at wrap-up, Module 6
+- The `review-checklist` skill (`.claude/skills/review-checklist`) checks a brief on six points: current experience, problem, owner, success measure, scope start vs end, problem before fix. It reviews only and does not rewrite.
+- Run on `05-super-speed/brief.md`: five points passed; scope start vs end was Partly. The brief frames the target as four quiet responders, but change 3 recalculates every responder's score at release, and no success measure covers those others beyond overall acceptance staying at or above ~73%.
+- Fix before it goes to Helen: add a measure for the non-target responders (how many change rank, no drop in their pings or acceptance), or reword the title and "Who it's for" to say it reaches everyone; also say whether the recalculation is feasible. Not yet done.
+- Smaller points: the owner is a role ("Dispatch PM"), not a name; "taking it restores their place" in change 2 is untested (a take is +0.08 against -0.12 per miss).
+- The review was run on the local file. The GitHub link in the prompt pointed at another account's repo (MichaelaBourgeois), not the student's own.

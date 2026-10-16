@@ -14,6 +14,7 @@ prompt library built from your own questions.
 ---
 
 ### 1.
+run review checklist skill on this brief: https://github.com/MichaelaBourgeois/claude-code-for-pms-final/blob/main/05-super-speed/brief.md
 
 ### 2.
 
